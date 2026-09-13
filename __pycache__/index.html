@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شاشة مراقبة الحضور والمخالفات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+    <div class="max-w-5xl mx-auto">
+        <header class="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <h1 class="text-2xl font-bold text-gray-800">نظام مراقبة الحضور والسلوك الحي</h1>
+            <div id="status" class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-700">
+                جاري الاتصال بالسيرفر...
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                <h2 class="text-lg font-bold mb-4 text-red-600 flex items-center gap-2">
+                    <span>🚨</span> المخالفات والتنبيهات المباشرة
+                </h2>
+                <div id="alerts-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-gray-400 text-sm">لا توجد مخالفات مسجلة حتى الآن...</p>
+                </div>
+            </div>
+
+           
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                <h2 class="text-lg font-bold mb-4 text-blue-600 flex items-center gap-2">
+                    <span>📋</span> سجل عمليات التبصيم الحية
+                </h2>
+                <div id="checkins-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-gray-400 text-sm">بانتظار وصول قراءات من المحاكي...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket("ws://127.0.0.1:8000/ws/checkin");
+        const statusDiv = document.getElementById("status");
+        const alertsList = document.getElementById("alerts-list");
+        const checkinsList = document.getElementById("checkins-list");
+
+        let firstCheckin = true;
+        let firstAlert = true;
+
+        ws.onopen = () => {
+            statusDiv.textContent = "متصل بالسيرفر (مباشر)";
+            statusDiv.className = "px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-700";
+        };
+
+        ws.onclose = () => {
+            statusDiv.textContent = "غير متصل";
+            statusDiv.className = "px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-700";
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+           
+            if (firstCheckin) {
+                checkinsList.innerHTML = "";
+                firstCheckin = false;
+            }
+
+            const checkinCard = document.createElement("div");
+            checkinCard.className = "p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center text-sm";
+            checkinCard.innerHTML = `
+                <div>
+                    <span class="font-bold text-gray-700">${data.student_id}</span> - ${data.room}
+                </div>
+                <div class="text-xs text-gray-500">
+                    بطاقة: <span class="${data.badge_status === 'Valid' ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">${data.badge_status}</span>
+                </div>
+            `;
+            checkinsList.prepend(checkinCard);
+
+           
+            if (data.alerts && data.alerts.length > 0) {
+                if (firstAlert) {
+                    alertsList.innerHTML = "";
+                    firstAlert = false;
+                }
+
+                data.alerts.forEach(alert => {
+                    const alertCard = document.createElement("div");
+                    alertCard.className = "p-3 bg-red-50 border-r-4 border-red-500 text-red-800 rounded shadow-sm text-sm";
+                    alertCard.innerHTML = `
+                        <div class="font-bold">الطالب: ${data.student_id} (${alert.type})</div>
+                        <div class="text-xs mt-1">${alert.details}</div>
+                       <div class="text-xs text-red-500 mt-1 font-semibold">مستوى الخطورة: ${alert.score || alert.risk_score}</div>
+                    `;
+                    alertsList.prepend(alertCard);
+                });
+            }
+        };
+    </script>
+</body>
+</html>
